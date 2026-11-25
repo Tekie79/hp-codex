@@ -1,102 +1,159 @@
 'use strict';
-const {spawn}=require('node:child_process');
-const {EventEmitter}=require('node:events');
-const path=require('node:path');
 
-function launchSpec(executable,cwd,env=process.env){
-  if(executable!=='codex'&&!path.isAbsolute(executable))throw Error('Use codex on PATH or a trusted absolute executable path');
-  if(!path.isAbsolute(cwd))throw Error('Workspace path must be absolute');
-  // Native configuration and authentication are authoritative: no overrides, no copies.
-  return {executable,args:['app-server'],options:{cwd,env:{...env},shell:false,stdio:['pipe','pipe','pipe'],windowsHide:true}};
+const { execFile, spawn } = require('node:child_process');
+const { promisify } = require('node:util');
+const { EventEmitter } = require('node:events');
+const path = require('node:path');
+const { homedir, platform, arch } = require('node:os');
+
+const exec = promisify(execFile);
+const PROTOCOL_VERSION = '0.155.1';
+const MAX_FRAME = 8_000_000;
+const MAX_PENDING = 64;
+
+function launchSpec(executable, cwd, env = process.env) {
+  if (!['codex', 'codex.exe'].includes(executable) && !path.isAbsolute(executable)) {
+    throw Error('Use Codex on PATH or select a trusted absolute executable path');
+  }
+  if (!path.isAbsolute(cwd)) throw Error('Workspace path must be absolute');
+  return {
+    executable, args: ['app-server'],
+    options: { cwd, env: { ...env }, shell: false, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
+  };
 }
-class Rpc extends EventEmitter{
-  constructor(spec){
-    super();this.pending=new Map();this.next=0;this.buffer='';this.closed=false;
-    this.child=spawn(spec.executable,spec.args,spec.options);
-    this.child.stdout.setEncoding('utf8');this.child.stdout.on('data',c=>this.receive(c));
-    this.child.stderr.resume(); // Raw output can contain credentials; never log it.
-    this.child.stdin.on('error',()=>this.close('Codex input closed'));
-    this.child.on('error',()=>this.close('Unable to launch existing Codex'));
-    this.child.on('exit',()=>this.close('Codex disconnected; task outcome may be unknown'));
-  }
-  receive(c){
-    if(this.closed)return;this.buffer+=c;
-    let i;
-    while((i=this.buffer.indexOf('\n'))>=0){
-      const line=this.buffer.slice(0,i);this.buffer=this.buffer.slice(i+1);
-      if(line.length>8_000_000){this.close('Oversize native response');return;}
-      if(!line.trim())continue;
-      let m;try{m=JSON.parse(line);}catch{this.close('Invalid native response');return;}
-      if(!m||typeof m!=='object'){this.close('Invalid native response');return;}
-      if(typeof m.method==='string'){
-        if(Object.hasOwn(m,'id'))this.send({id:m.id,error:{code:-32601,message:'Interactive requests not supported by this preview'}});
-        else this.emit('notification',m);
-      }else{
-        const p=this.pending.get(m.id);if(!p)continue;
-        this.pending.delete(m.id);clearTimeout(p.timer);
-        if(m.error)p.reject(Error('Native request rejected: '+p.method));else p.resolve(m.result);
-      }
+
+async function discover({ configured = 'codex', cwd, bundled, env = process.env, home = homedir() }) {
+  launchSpec(configured, cwd, env);
+  const local = platform() !== 'win32';
+  const name = local ? 'codex' : 'codex.exe';
+  const bundledPlatform = { darwin: 'macos', linux: 'linux', win32: 'windows' }[platform()];
+  const bundledArch = { arm64: 'aarch64', x64: 'x86_64' }[arch()];
+  const candidates = configured !== 'codex' ? [configured] : [
+    name,
+    ...(local ? [path.join(home, '.local/bin/codex'), '/opt/homebrew/bin/codex', '/usr/local/bin/codex'] : []),
+    ...(bundled && bundledPlatform && bundledArch ? [path.join(bundled, 'bin', bundledPlatform + '-' + bundledArch, name)] : []),
+  ];
+  const found = [];
+  for (const candidate of new Set(candidates)) {
+    try {
+      const { stdout } = await exec(candidate, ['--version'], { cwd, env, timeout: 5000, maxBuffer: 8192, windowsHide: true });
+      const version = /^codex-cli ([0-9A-Za-z.+-]+)\s*$/.exec(stdout)?.[1];
+      if (version === PROTOCOL_VERSION) return { version, spec: launchSpec(candidate, cwd, env) };
+      if (version) found.push(version);
+    } catch {
+      // The version probe is discovery only. Raw stdout/stderr may contain private configuration.
     }
-    if(this.buffer.length>8_000_000)this.close('Oversize native response');
   }
-  send(m){if(this.closed)throw Error('Not connected');this.child.stdin.write(JSON.stringify(m)+'\n');}
-  request(method,params={},ms=30_000){
-    if(this.closed)return Promise.reject(Error('Not connected'));
-    const id=++this.next;
-    return new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('Native request timed out; outcome unknown: '+method));},ms);
-      this.pending.set(id,{resolve,reject,timer,method});
-      try{this.send({id,method,params});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}
+  const versions = found.length ? ' Found ' + [...new Set(found)].join(', ') + '.' : '';
+  throw Error('HP Codex requires official Codex ' + PROTOCOL_VERSION + '.' + versions);
+}
+
+class RpcError extends Error {
+  constructor(message, uncertain = false, code = null) {
+    super(message);
+    this.uncertain = uncertain;
+    this.code = code;
+  }
+}
+
+class Rpc extends EventEmitter {
+  constructor(spec) {
+    super();
+    this.pending = new Map();
+    this.next = 0;
+    this.buffer = '';
+    this.closed = false;
+    this.child = spawn(spec.executable, spec.args, spec.options);
+    this.child.stdout.setEncoding('utf8').on('data', chunk => this.receive(chunk));
+    this.child.stderr.resume();
+    this.child.stdin.on('error', () => this.close('Codex input closed'));
+    this.child.on('error', () => this.close('Unable to launch existing Codex'));
+    this.child.on('close', () => this.close('Codex disconnected'));
+  }
+
+  receive(chunk) {
+    if (this.closed) return;
+    this.buffer += chunk;
+    let newline;
+    while (!this.closed && (newline = this.buffer.indexOf('\n')) >= 0) {
+      const line = this.buffer.slice(0, newline);
+      this.buffer = this.buffer.slice(newline + 1);
+      if (line.length > MAX_FRAME) return this.close('Oversize native response');
+      if (!line.trim()) continue;
+      let message;
+      try { message = JSON.parse(line); }
+      catch { return this.close('Invalid native response'); }
+      if (!message || typeof message !== 'object' || Array.isArray(message)) return this.close('Invalid native response');
+      if (typeof message.method === 'string') {
+        if (!Object.hasOwn(message, 'id')) this.emit('notification', message);
+        else if (typeof message.id === 'string' || Number.isSafeInteger(message.id)) {
+          if (!this.emit('request', message)) {
+            try { this.reject(message.id); } catch { this.close('Codex input buffer is unavailable'); }
+          }
+        } else return this.close('Invalid native request identifier');
+        continue;
+      }
+      const pending = this.pending.get(message.id);
+      if (!pending) continue;
+      if (Object.hasOwn(message, 'result') === Object.hasOwn(message, 'error') || (Object.hasOwn(message, 'error') && !message.error)) return this.close('Invalid native response envelope');
+      this.pending.delete(message.id);
+      clearTimeout(pending.timer);
+      if (message.error) pending.reject(new RpcError('Codex rejected ' + pending.method, false, message.error.code));
+      else pending.resolve(message.result);
+    }
+    if (this.buffer.length > MAX_FRAME) this.close('Oversize native response');
+  }
+
+  send(message) {
+    if (this.closed) throw new RpcError('Codex is disconnected');
+    const line = JSON.stringify(message) + '\n';
+    if (line.length > MAX_FRAME) throw new RpcError('Native request is too large');
+    if (this.child.stdin.writableLength + line.length > MAX_FRAME * 2) throw new RpcError('Codex input buffer is full');
+    this.child.stdin.write(line);
+  }
+
+  request(method, params, timeout = 30_000) {
+    if (this.closed || this.pending.size >= MAX_PENDING) return Promise.reject(new RpcError('Codex connection is unavailable or busy'));
+    const id = ++this.next;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new RpcError('Codex timed out during ' + method, true));
+      }, timeout);
+      this.pending.set(id, { resolve, reject, timer, method });
+      try { this.send({ id, method, params }); }
+      catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error);
+      }
     });
   }
-  notify(method){this.send({method});}
-  close(reason='Connection closed'){
-    if(this.closed)return;this.closed=true;
-    for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(Error(reason));}
-    this.pending.clear();this.buffer='';this.child.kill();this.emit('closed',reason);
+
+  notify(method) { this.send({ method }); }
+  respond(id, result) { if (!this.closed) this.send({ id, result }); }
+  reject(id) {
+    if (!this.closed) this.send({ id, error: { code: -32601, message: 'This client does not support this native request in the current context' } });
+  }
+
+  close(reason = 'Connection closed') {
+    if (this.closed) return;
+    this.closed = true;
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new RpcError(reason, true));
+    }
+    this.pending.clear();
+    this.buffer = '';
+    this.child.stdin.destroy();
+    this.child.kill();
+    const kill = setTimeout(() => {
+      if (this.child.exitCode === null && this.child.signalCode === null) this.child.kill('SIGKILL');
+    }, 3000);
+    kill.unref();
+    this.child.once('close', () => clearTimeout(kill));
+    this.emit('closed', reason);
   }
 }
-function clean(v){return typeof v==='string'?v.slice(0,12000):'';}
-function newState(){return {threadId:null,turnId:null,status:'idle',items:[],plan:[],usage:null,samples:[],startedAt:null};}
-function event(s,m,p,now=Date.now()){
-  if(!p||!s.threadId||p.threadId!==s.threadId)return;
-  const id=p.turnId||p.turn?.id;
-  if(m==='turn/started'){
-    if(typeof id!=='string'||(s.turnId&&s.turnId!==id&&s.status==='running'))return;
-    if(s.turnId===id&&s.status==='running')return;
-    s.turnId=id;s.status='running';s.startedAt=now;s.plan=[];return;
-  }
-  if(id&&s.turnId&&id!==s.turnId)return;
-  if(m==='turn/completed'&&id===s.turnId){s.status=['completed','failed','interrupted'].includes(p.turn?.status)?p.turn.status:'unknown';return;}
-  if(m==='turn/plan/updated'){s.plan=(Array.isArray(p.plan)?p.plan:[]).slice(0,100).map(x=>({step:clean(x.step),status:clean(x.status)}));return;}
-  if(m==='thread/tokenUsage/updated'){
-    const u=p.tokenUsage;
-    if(!u)return;
-    const safe=x=>Object.fromEntries(['totalTokens','inputTokens','cachedInputTokens','outputTokens','reasoningOutputTokens'].map(k=>[k,Number.isFinite(x?.[k])?x[k]:null]));
-    const total=safe(u.total),last=safe(u.last);
-    if(last.totalTokens!==null&&total.totalTokens!==null&&total.totalTokens!==s.usage?.total.totalTokens){s.samples.push(last.totalTokens);if(s.samples.length>60)s.samples.shift();}
-    s.usage={total,last,capacity:Number.isFinite(u.modelContextWindow)?u.modelContextWindow:null};return;
-  }
-  if(m==='item/started'||m==='item/completed'){
-    const i=p.item;if(typeof i?.id!=='string')return;
-    const idx=s.items.findIndex(x=>x.id===i.id);
-    if(idx>=0&&s.items[idx].done&&m==='item/started')return;
-    let detail='';
-    if(i.type==='agentMessage'||i.type==='plan')detail=clean(i.text);
-    else if(i.type==='reasoning')detail=clean(Array.isArray(i.summary)?i.summary.join('\n'):'');
-    else if(i.type==='commandExecution')detail=clean(i.aggregatedOutput);
-    else if(i.type==='fileChange')detail=clean((Array.isArray(i.changes)?i.changes:[]).map(x=>clean(x.path)+'\n'+clean(x.diff)).join('\n'));
-    else if(i.type==='webSearch')detail=clean(i.query);
-    else if(i.type==='collabToolCall')detail=clean(i.tool);
-    const row={id:i.id,label:clean(i.type)+(i.type==='commandExecution'?': '+clean(i.command):''),detail,status:clean(i.status)||(m==='item/completed'?'completed':'inProgress'),done:m==='item/completed'};
-    if(idx<0)s.items.push(row);else s.items[idx]=row;
-    if(s.items.length>200)s.items.shift();return;
-  }
-  const types={'item/agentMessage/delta':'Agent message','item/plan/delta':'Plan','item/reasoning/summaryTextDelta':'Reasoning summary','item/commandExecution/outputDelta':'Command'};
-  if(types[m]&&typeof p.itemId==='string'){
-    let row=s.items.find(x=>x.id===p.itemId);
-    if(!row){row={id:p.itemId,label:types[m],detail:'',status:'inProgress',done:false};s.items.push(row);if(s.items.length>200)s.items.shift();}
-    if(!row.done)row.detail=(row.detail+clean(p.delta)).slice(-12000);
-  }
-}
-module.exports={launchSpec,Rpc,newState,event};
+
+module.exports = { PROTOCOL_VERSION, launchSpec, discover, Rpc, RpcError, ...require('./state') };

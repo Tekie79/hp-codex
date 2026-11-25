@@ -1,0 +1,203 @@
+#!/usr/bin/env node
+'use strict';
+
+const readline = require('node:readline');
+const { randomUUID } = require('node:crypto');
+const { appendFileSync } = require('node:fs');
+const contract = require('../../../protocol/0.155.1/methods.json');
+
+if (process.argv.includes('--version')) {
+  process.stdout.write('codex-cli ' + (process.env.HP_FIXTURE_VERSION || contract.version) + '\n');
+  process.exit();
+}
+
+const scenario = process.env.HP_FIXTURE_SCENARIO || 'normal';
+const cwd = process.cwd();
+const provider = 'openai';
+const rows = new Map();
+const turns = new Map();
+const write = message => process.stdout.write(JSON.stringify(message) + '\n');
+const notify = (method, params) => write({ method, params });
+const completeItem = (threadId, turnId, item) => notify('item/completed', { threadId, turnId, item });
+const timestamp = () => Math.floor(Date.now() / 1000);
+const newThread = (name, status = 'idle') => ({
+  id: randomUUID(), parentThreadId: null, name, preview: '', cwd, modelProvider: provider,
+  model: 'fixture-model', reasoningEffort: 'medium', updatedAt: timestamp(), status: { type: status }, turns: [],
+});
+const saved = newThread('Saved conversation');
+saved.id = 'fixture-saved';
+rows.set(saved.id, saved);
+turns.set(saved.id, Array.from({ length: 36 }, (_, index) => ({
+  id: 'historic-' + index, status: 'completed', startedAt: timestamp() - 600 + index,
+  items: [
+    { type: 'userMessage', id: 'historic-user-' + index, content: [{ type: 'text', text: 'Synthetic history turn ' + index }] },
+    { type: 'agentMessage', id: 'historic-agent-' + index, text: 'Synthetic history response ' + index + '\n\n' + 'Fixture transcript. '.repeat(12) },
+  ],
+})));
+const foreign = { ...newThread('Other provider'), modelProvider: 'other' };
+rows.set(foreign.id, foreign);
+let pending;
+let started = false;
+let experimental = false;
+let running = null;
+let interrupted = false;
+
+const usage = (threadId, turnId, totalTokens) => notify('thread/tokenUsage/updated', {
+  threadId, turnId, tokenUsage: {
+    total: { totalTokens, inputTokens: totalTokens - 90, cachedInputTokens: 60, outputTokens: 90, reasoningOutputTokens: 32 },
+    last: { totalTokens: 210, inputTokens: 120, cachedInputTokens: 60, outputTokens: 90, reasoningOutputTokens: 32 },
+    modelContextWindow: 196000,
+  },
+});
+function finish(run, status) {
+  if (running !== run) return;
+  if (pending) {
+    notify('serverRequest/resolved', { threadId: run.thread.id, requestId: pending.id });
+    pending = null;
+  }
+  run.turn.status = status;
+  run.turn.completedAt = timestamp();
+  run.turn.durationMs = Date.now() - run.startTime;
+  run.thread.status = { type: 'idle' };
+  notify('turn/completed', { threadId: run.thread.id, turn: run.turn });
+  running = null;
+}
+
+function runFixture(run, decision) {
+  if (running !== run || interrupted) return;
+  const { thread, turn } = run;
+  const threadId = thread.id, turnId = turn.id;
+  const agent = { type: 'agentMessage', id: 'answer-' + turnId, text: '## Verified\n\n' +
+    'The synthetic workspace is ready.\n\n```js\nconst test = "fixture";\n```\n\n<script>alert("unsafe")</script>' };
+  const patch = { type: 'fileChange', id: 'edit-' + turnId, status: 'completed', changes: [{ path: 'fixture.txt', kind: { type: 'add' }, diff: '+fixture' }] };
+  completeItem(threadId, turnId, { ...run.command, status: decision === 'accept' ? 'completed' : 'declined',
+    aggregatedOutput: decision === 'accept' ? 'fixture\n'.repeat(4000) : '', exitCode: decision === 'accept' ? 0 : null, durationMs: 18 });
+  completeItem(threadId, turnId, patch);
+  notify('turn/diff/updated', { threadId, turnId, diff: 'diff --git a/fixture.txt b/fixture.txt\n+fixture' });
+  const children = ['Researcher', 'Verifier'].map(name => {
+    const child = { ...newThread(name), parentThreadId: threadId, agentNickname: name, agentRole: 'explorer' };
+    rows.set(child.id, child);
+    return child;
+  });
+  completeItem(threadId, turnId, { type: 'collabAgentToolCall', id: 'agents-' + turnId, tool: 'wait', senderThreadId: threadId, receiverThreadIds: children.map(child => child.id),
+    prompt: 'Confirm the fixture', status: 'completed', agentsStates: Object.fromEntries(children.map(child => [child.id, { status: 'completed', message: 'Confirmed fixture' }])) });
+  usage(threadId, turnId, 210);
+  usage(threadId, turnId, 420);
+  usage(threadId, turnId, 420);
+  notify('item/agentMessage/delta', { threadId, turnId, itemId: agent.id, delta: 'Verifying…' });
+  setTimeout(() => {
+    if (running !== run) return;
+    turn.items.push(patch, agent);
+    completeItem(threadId, turnId, agent);
+    notify('turn/plan/updated', { threadId, turnId, plan: run.plan.map(step => ({ ...step, status: 'completed' })) });
+    finish(run, 'completed');
+  }, 120);
+}
+
+const reader = readline.createInterface({ input: process.stdin });
+reader.on('line', line => {
+  const message = JSON.parse(line);
+  const { id, method, params = {} } = message;
+  if (process.env.HP_FIXTURE_TRACE) appendFileSync(process.env.HP_FIXTURE_TRACE, JSON.stringify({ method, id, params, result: message.result, error: message.error }) + '\n');
+  const respond = result => write({ id, result });
+  const fail = (code = -32601) => write({ id, error: { code, message: 'Synthetic native error' } });
+  if (method === 'initialize') {
+    experimental = Boolean(params.capabilities?.experimentalApi);
+    return respond({ userAgent: 'hp-fixture/0.155.1', codexHome: process.env.CODEX_HOME || '/fixture-home', platformFamily: 'unix', platformOs: 'fixture' });
+  }
+  if (method === 'initialized') { started = true; return; }
+  if (!started) return fail(-32600);
+  if (!method) {
+    if (pending?.id === id) {
+      const run = running;
+      pending = null;
+      notify('serverRequest/resolved', { threadId: run.thread.id, requestId: id });
+      runFixture(run, message.result?.decision);
+    }
+    return;
+  }
+  if (!(experimental ? contract.withExperimental : contract.stable).ClientRequest.includes(method)) return fail();
+  switch (method) {
+    case 'account/read': return respond({ account: { type: 'chatgpt', email: 'fixture@example.invalid', planType: 'prolite' }, requiresOpenaiAuth: true });
+    case 'account/rateLimits/read': return respond({ rateLimits: { limitId: 'codex', primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: timestamp() + 7200 } } });
+    case 'config/read': return respond({ config: { model: 'fixture-model', model_reasoning_effort: 'medium', model_provider: provider }, origins: {}, layers: null });
+    case 'configRequirements/read': return respond({ requirements: null });
+    case 'model/list': return respond({ data: [{ model: 'fixture-model', displayName: 'Fixture model', hidden: false, supportedReasoningEfforts: [{ reasoningEffort: 'medium' }] }], nextCursor: null });
+    case 'collaborationMode/list': return respond({ data: [{ name: 'Plan', mode: 'plan', model: null, reasoning_effort: null }] });
+    case 'mcpServerStatus/list': return respond({ data: [{ name: 'fixture-server', tools: { read_fixture: {} }, resources: [], authStatus: 'oAuth', runtimeStatus: 'connected' }] });
+    case 'skills/list': return respond({ data: [{ skills: [{ name: 'fixture', enabled: true, path: cwd + '/SKILL.md', scope: 'repo', pluginId: 'fixture-plugin' }] }] });
+    case 'plugin/installed': return respond({ marketplaces: [{ plugins: [{ id: 'fixture-plugin', name: 'Fixture plugin', installed: true, enabled: true }] }] });
+    case 'hooks/list': return respond({ data: [{ hooks: [] }] });
+    case 'app/installed': return respond({ apps: [{ id: 'fixture-app', runtimeName: 'Fixture app', enabled: true, callable: true }] });
+    case 'thread/list': return respond({ data: [...rows.values()].filter(thread => Boolean(thread.archived) === Boolean(params.archived)), nextCursor: null });
+    case 'thread/start':
+    case 'thread/fork': {
+      const thread = newThread(method === 'thread/fork' ? 'Forked conversation' : 'Disposable fixture chat');
+      if (method === 'thread/fork') turns.set(thread.id, turns.get(params.threadId) || []);
+      rows.set(thread.id, thread);
+      return respond({ thread, model: thread.model, modelProvider: thread.modelProvider, reasoningEffort: thread.reasoningEffort });
+    }
+    case 'thread/resume':
+    case 'thread/read': {
+      const thread = rows.get(params.threadId);
+      if (!thread) return fail(-32602);
+      return respond({ thread, model: thread.model, modelProvider: provider, reasoningEffort: thread.reasoningEffort });
+    }
+    case 'thread/name/set': rows.get(params.threadId).name = params.name; return respond({});
+    case 'thread/archive': rows.get(params.threadId).archived = true; return respond({});
+    case 'thread/unarchive': rows.get(params.threadId).archived = false; return respond({});
+    case 'thread/unsubscribe':
+    case 'config/mcpServer/reload': return respond({});
+    case 'thread/items/list': {
+      const entries = (turns.get(params.threadId) || []).flatMap(turn => turn.items.map(item => ({ turnId: turn.id, item }))).reverse();
+      const offset = Number(params.cursor) || 0;
+      const end = offset + (params.limit || 30);
+      return respond({ data: entries.slice(offset, end), nextCursor: end < entries.length ? String(end) : null });
+    }
+    case 'thread/turns/list': return respond({ data: (turns.get(params.threadId) || []).slice().reverse(), nextCursor: null });
+    case 'turn/start':
+    case 'review/start': {
+      if (scenario === 'malformed') {
+        process.stdout.write('{junk\n');
+        return;
+      }
+      if (scenario === 'exit') process.exit(9);
+      if (scenario === 'timeout') return;
+      const thread = rows.get(params.threadId);
+      if (!thread || running || params.modelProvider || params.approvalPolicy || params.sandboxPolicy) return fail(-32602);
+      if (method === 'turn/start' && !params.input?.some(part => part.type === 'text' && Array.isArray(part.text_elements))) return fail(-32602);
+      thread.status = { type: 'active', activeFlags: [] };
+      const turn = { id: randomUUID(), status: 'inProgress', startedAt: timestamp(), completedAt: null, durationMs: null, items: [] };
+      const receipt = { type: 'userMessage', id: 'user-' + turn.id, clientId: params.clientUserMessageId, content: params.input || [] };
+      const command = { type: 'commandExecution', id: 'command-' + turn.id, command: 'wc -l fixture.txt', cwd, status: 'inProgress', commandActions: [] };
+      const plan = [...Array(16)].map((_, index) => ({ step: 'Verify synthetic step ' + (index + 1), status: index ? 'pending' : 'inProgress' }));
+      const run = { thread, turn, command, plan, startTime: Date.now() };
+      running = run;
+      interrupted = false;
+      turns.set(thread.id, [...(turns.get(thread.id) || []), turn]);
+      turn.items.push(receipt);
+      if (scenario !== 'lost-ack') respond({ turn, reviewThreadId: thread.id });
+      notify('turn/started', { threadId: thread.id, turn });
+      completeItem(thread.id, turn.id, receipt);
+      notify('turn/plan/updated', { threadId: thread.id, turnId: turn.id, plan });
+      notify('item/started', { threadId: thread.id, turnId: turn.id, item: command });
+      usage(thread.id, turn.id, 210);
+      if (scenario === 'normal') {
+        const params = { threadId: thread.id, turnId: turn.id, itemId: command.id, kind: 'command', command: command.command, cwd, reason: 'Verify the fixture', availableDecisions: ['accept', 'decline', 'cancel'] };
+        pending = { id: 'approval-' + turn.id };
+        write({ id: pending.id, method: 'item/commandExecution/requestApproval', params });
+        write({ id: 'unsupported-' + turn.id, method: 'fixture/unknown', params });
+      } else if (scenario !== 'hold') setTimeout(() => runFixture(run, 'accept'), 100);
+      return;
+    }
+    case 'turn/steer':
+      if (!running || running.turn.id !== params.expectedTurnId || running.thread.id !== params.threadId) return fail(-32602);
+      return respond({ turnId: running.turn.id });
+    case 'turn/interrupt':
+      if (!running || running.turn.id !== params.turnId) return fail(-32602);
+      interrupted = true;
+      respond({});
+      return finish(running, 'interrupted');
+    default: return fail();
+  }
+});

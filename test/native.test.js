@@ -33,3 +33,28 @@ test('native final item replaces partial and ignores stale deltas',()=>{
   event(s,'turn/completed',{threadId:'t',turn:{id:'u',status:'completed'}});
   assert.equal(s.status,'completed');
 });
+
+test('ignore stale usage and terminal deltas, retain thread history, and expose only reasoning summaries', () => {
+  const { begin } = require('../src/state');
+  const state = newState();
+  state.threadId = 'thread';
+  begin(state);
+  event(state, 'turn/started', { threadId: 'thread', turn: { id: 'first', status: 'inProgress' } }, 1);
+  event(state, 'item/completed', {
+    threadId: 'thread', turnId: 'first',
+    item: { id: 'reason', type: 'reasoning', summary: ['public summary'], content: ['private content'] },
+  });
+  event(state, 'thread/tokenUsage/updated', {
+    threadId: 'thread', turnId: 'first', tokenUsage: { total: { totalTokens: 10 }, last: { totalTokens: 10 } },
+  });
+  event(state, 'thread/tokenUsage/updated', {
+    threadId: 'thread', turnId: 'first', tokenUsage: { total: { totalTokens: 9 }, last: { totalTokens: 9 } },
+  });
+  event(state, 'turn/completed', { threadId: 'thread', turn: { id: 'first', status: 'completed', durationMs: 125 } });
+  event(state, 'turn/started', { threadId: 'thread', turn: { id: 'first', status: 'inProgress' } });
+  assert.equal(state.status, 'completed');
+  assert.equal(state.durationMs, 125);
+  assert.deepEqual(state.samples, [10]);
+  assert.equal(state.items[0].detail, 'public summary');
+  assert.doesNotMatch(JSON.stringify(state), /private content/);
+});

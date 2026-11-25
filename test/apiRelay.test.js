@@ -17,7 +17,7 @@ test('independent provider passes only temporary capability, preserves native ho
   assert.equal(Object.hasOwn(env,route.envKey),false);
   assert.ok(route.spec.args.includes('model_provider='+JSON.stringify(route.provider)));
   assert.ok(route.spec.args.includes('model_providers.'+route.provider+'.requires_openai_auth=false'));
-  const p={base_url:relay.baseUrl,env_key:route.envKey,requires_openai_auth:false,wire_api:'responses',supports_websockets:false};
+  const p={base_url:relay.baseUrl,env_key:route.envKey,requires_openai_auth:false,wire_api:'responses',supports_websockets:false,request_max_retries:0,stream_max_retries:0};
   const config={model_provider:route.provider,model_providers:{[route.provider]:p}};
   assert.doesNotThrow(()=>verifyRoute(config,route.provider,relay.baseUrl,route.envKey));
   assert.throws(()=>verifyRoute({...config,model_provider:'openai'},route.provider,relay.baseUrl,route.envKey));
@@ -51,4 +51,39 @@ test('relay rejects unapproved and unsupported requests, injects only its own ke
     assert.equal((await post('/responses')).status,429);
     relay.disarm();assert.equal((await post('/responses')).status,403);
   }finally{relay.close();}
+});
+
+test('relay masks invalid-key errors and rejects upstream redirection without a second request', async () => {
+  const endpoints = [];
+  const upstream = (url, options, respond) => {
+    assert.ok(options.headers.Authorization.startsWith('Bearer synthetic'));
+    endpoints.push(url);
+    const transport = new EventEmitter();
+    transport.setTimeout = () => {};
+    transport.destroy = () => {};
+    transport.end = () => {
+      const response = Readable.from(['synthetic upstream private error payload']);
+      response.statusCode = endpoints.length === 1 ? 401 : 307;
+      response.headers = { location: 'https://untrusted.invalid/other' };
+      respond(response);
+    };
+    return transport;
+  };
+  const relay = await createRelay('synthetic-invalid-key', { upstream });
+  try {
+    relay.arm();
+    const post = headers => fetch(relay.baseUrl + '/responses', {
+      method: 'POST', headers: { authorization: 'Bearer ' + relay.capability, 'content-type': 'application/json', ...headers },
+      body: '{"model":"fixture"}',
+    });
+    assert.equal((await post({ origin: 'https://untrusted.invalid' })).status, 403);
+    const denied = await post();
+    assert.equal(denied.status, 401);
+    assert.doesNotMatch(await denied.text(), /private error payload/);
+    assert.equal(relay.billing.lastError, 401);
+    assert.equal((await post()).status, 502);
+    assert.equal(endpoints.length, 2);
+    assert.ok(endpoints.every(url => url === 'https://api.openai.com/v1/responses'));
+    assert.equal(relay.billing.estimate, null);
+  } finally { relay.close(); }
 });

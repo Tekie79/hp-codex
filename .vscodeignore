@@ -1,0 +1,11 @@
+**
+!package.json
+!README.md
+!CHANGELOG.md
+!src/**
+!media/icon.svg
+!media/monitor.css
+!media/monitor.bundle.js
+!docs/installation.md
+!docs/parity.md
+!docs/independent-api-key.md
