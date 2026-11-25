@@ -1,12 +1,12 @@
 {
   "name": "hp-codex",
   "displayName": "HP Codex",
-  "description": "Native Codex execution monitor",
-  "version": "0.0.2",
+  "description": "VS Code frontend for the existing native Codex App Server",
+  "version": "0.1.0",
   "publisher": "hp-codex-dev",
   "engines": {
     "vscode": "^1.95.0",
-    "node": ">=20"
+    "node": ">=22"
   },
   "main": "./src/extension.js",
   "activationEvents": [
@@ -37,7 +37,7 @@
       "hpCodex": [
         {
           "id": "hpCodex.monitor",
-          "name": "Execution Monitor",
+          "name": "HP Codex",
           "type": "webview"
         }
       ]
@@ -52,14 +52,55 @@
           "description": "Trusted existing Codex executable (absolute path or codex on PATH)"
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "hpCodex.connect",
+        "title": "HP Codex: Connect Existing Runtime"
+      },
+      {
+        "command": "hpCodex.attachEditor",
+        "title": "HP Codex: Attach Active Editor"
+      }
+    ]
   },
   "scripts": {
+    "build": "esbuild media/monitor.js --bundle --platform=browser --target=chrome128 --minify --legal-comments=inline --outfile=media/monitor.bundle.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/native.js && node --check src/extension.js && node --check media/monitor.js && node --check src/apiRelay.js"
+    "test:ui": "node test/run-vscode.cjs",
+    "lint": "eslint src media test scripts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check": "npm run lint && npm run typecheck && npm run build",
+    "vscode:prepublish": "npm run build",
+    "package:vsix": "node scripts/package.cjs",
+    "protocol:generate": "node scripts/generate-protocol.cjs"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/Tekie79/hp-codex.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.7",
+    "@vscode/vsce": "4.1.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^15.0.3",
+    "playwright-core": "^1.65.1",
+    "typescript": "^6.0.3"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "codex",
+    "app server",
+    "coding agent"
+  ],
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "11.0.1"
+    }
   }
 }

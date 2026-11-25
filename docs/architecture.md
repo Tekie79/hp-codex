@@ -1,35 +1,21 @@
 # Architecture
 
-VS Code webview -> extension host/client adapter -> native Codex App Server (stdio) -> existing Codex runtime.
+The VS Code webview sends user actions to the extension host. The host validates actions and talks to the official Codex App Server over newline-delimited JSON-RPC on stdio. The native engine owns prompts, inference and tool orchestration, instructions, persistent conversations, skills, hooks, plugins, sandbox enforcement and approval policy.
 
-## Shared environment contract (non-negotiable)
+## Runtime and protocol
 
-Launch the existing supported binary with the actual selected workspace cwd and inherited process environment. If CODEX_HOME is set, preserve it verbatim; otherwise allow Codex to resolve its own default (commonly ~/.codex). Do not synthesize a new config, import native credentials, parse auth.json, silently change environment providers or override policy. Only the explicitly selected independent HP API key mode may apply a process-local inference provider override; see docs/independent-api-key.md. Use native config/read and configRequirements/read where available to inspect effective settings safely. Preserve original settings even on uninstall. Existing official clients may use a separate live process; shared persistent settings/history do not imply shared live process ownership. Respect native concurrency and resume limitations.
+Discover the exact Codex version on PATH, at known install locations, or in the supported official extension bundle layout. An explicit machine-scoped executable setting is available. Launch with the extension host's inherited environment, native `CODEX_HOME` and the selected workspace's canonical path. Native configuration applies from every layer, including managed and project settings. [Versioned methods](../protocol/0.155.1/methods.json)
 
-Read native account status and account identity/routing where supported. Only on user instruction invoke native account login or logout; warn these can change the shared account. API mode requires explicit paid-action consent; never change provider automatically. Device/browser auth follows runtime-supported URLs and state, not homemade OAuth.
+The transport correlates requests and responses, bounds frames and pending requests, sanitizes its own errors, and closes failed child processes and relay connections. Unknown server requests fail closed. Scoped native events update only the selected thread and turn. Item snapshots supersede deltas, and terminal outcomes stop stale mutations. Reasoning content and raw response notifications are opted out where exposed by the protocol. Only native reasoning summaries are displayed.
 
-Discover MCP, installed plugins, apps, skills, hooks and models using version-matched native methods (e.g., mcpServerStatus/list, skills/list, plugin/list, app/list, hooks/list, model/list, config/read). Respect effective enablement and permission scopes. Distinguish unavailable vs empty. No raw config secrets in the UI. Use native config reload/management APIs only on explicit user request. The runtime is responsible for starting MCP servers, injecting skills, applying instructions and executing tools.
+## Thread lifecycle
 
-## App Server adapter
+Native thread IDs and provider/cwd metadata scope history. A read-only view uses paginated stored items. Resume attaches the client to an idle native thread. Before starting a turn, a bounded workspace-state checkpoint records thread ID, provider, method and the client message identifier. Reconciliation reads terminal turn state through App Server history. The extension never automatically submits the same turn again after ambiguous delivery.
 
-Verify released binary protocol via official docs and generated schemas. Newline-delimited JSON-RPC, initialize/initialized, request correlation, notifications, server requests, cancellation and timeout. No raw protocol forwarding to webview. Versioned capability adapters; no unsupported experimental API calls without explicit tested opt-in.
+## Webview and editor
 
-Native thread/start, thread/list/read/resume/fork and turn/start/steer/interrupt provide session behavior. Omit model, provider, sandbox, instructions and config overrides by default. Scope all events by thread/turn/item and connection generation. Preserve effective thread settings. Reconcile ambiguous requests using native state instead of resubmitting. Native approvals must be supported exactly; unknown server requests fail closed.
+The webview receives projected native data and offers a fixed set of extension actions. Untrusted labels render as text; Markdown disables raw HTML, navigation, and image loads. Approvals and secret or structured input are collected by native VS Code prompts. The UI separates cumulative tokens, latest increment, rate-limit windows, capacity, and API estimates. Native history stays in Codex, and attachment drafts and live transcripts are bounded in memory.
 
-Process item/started and item/completed, supported deltas, plan updates, token usage, diffs and agent collaboration. Render only safe summaries. Keep cumulative tokens and latest increments distinct. Context capacity is not occupancy. Estimate API price only with valid rate data. Subscription quota is not a dollar figure.
+## API routing
 
-## UI and storage
-
-Header: connection/account/model, task/status and elapsed. Usage graph and actual counters. Plan checklist. Expandable activity, agent tree and native diffs. Composer and editor integration. Native settings/inventory panel and history. Theme tokens, accessible controls and narrow sidebar.
-
-Codex owns native settings, secrets, history and plugin state; HP Codex stores only its UI preferences and bounded transient views by default, plus the optional independently supplied API key in VS Code SecretStorage. No telemetry in HP Codex. Existing engine behavior remains subject to native settings. All untrusted content renders as text or isolated, permission-checked native resources. No arbitrary shell or RPC bridge.
-
-## Parity boundaries
-
-App Server exposes native harness functionality; official UI-only features, private reasoning, cloud backend and client-specific authentication/verification may differ. Maintain evidence-backed capability matrix per released version. Unsupported functions must be visibly unavailable with supported official-client handoff where possible. Do not emulate proprietary endpoints or impersonate client identity.
-
-References: https://developers.openai.com/codex/app-server ; https://github.com/openai/codex/tree/main/codex-rs/app-server ; https://developers.openai.com/resources/docs-mcp
-
-## Independent API inference
-
-A distinct per-connection native provider routes Responses traffic through a local authenticated relay to the fixed OpenAI Platform endpoint. The actual API key remains in the extension host; the child receives only a short-lived local capability. Managed restrictions remain authoritative; do not bypass incompatible requirements. Existing home and native account stay intact. Key mode does not invoke native login/logout. Fresh thread required across mode/key changes. See docs/independent-api-key.md for constraints and release gates.
+Independent API mode creates a process-local custom Responses provider and a loopback relay. The original native config is read for routing and managed requirements before creating the override. The key is read from VS Code SecretStorage by the extension host. The App Server receives the relay capability only. [Independent API mode](independent-api-key.md)

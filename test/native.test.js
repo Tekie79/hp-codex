@@ -33,3 +33,47 @@ test('native final item replaces partial and ignores stale deltas',()=>{
   event(s,'turn/completed',{threadId:'t',turn:{id:'u',status:'completed'}});
   assert.equal(s.status,'completed');
 });
+
+test('ignore stale usage and terminal deltas, retain thread history, and expose only reasoning summaries', () => {
+  const { begin } = require('../src/state');
+  const state = newState();
+  state.threadId = 'thread';
+  begin(state);
+  event(state, 'turn/started', { threadId: 'thread', turn: { id: 'first', status: 'inProgress' } }, 1);
+  event(state, 'item/completed', {
+    threadId: 'thread', turnId: 'first',
+    item: { id: 'reason', type: 'reasoning', summary: ['public summary'], content: ['private content'] },
+  });
+  event(state, 'thread/tokenUsage/updated', {
+    threadId: 'thread', turnId: 'first', tokenUsage: { total: { totalTokens: 10 }, last: { totalTokens: 10 } },
+  });
+  event(state, 'thread/tokenUsage/updated', {
+    threadId: 'thread', turnId: 'first', tokenUsage: { total: { totalTokens: 9 }, last: { totalTokens: 9 } },
+  });
+  event(state, 'turn/completed', { threadId: 'thread', turn: { id: 'first', status: 'completed', durationMs: 125 } });
+  event(state, 'turn/started', { threadId: 'thread', turn: { id: 'first', status: 'inProgress' } });
+  assert.equal(state.status, 'completed');
+  assert.equal(state.durationMs, 125);
+  assert.deepEqual(state.samples, [10]);
+  assert.equal(state.items[0].detail, 'public summary');
+  assert.doesNotMatch(JSON.stringify(state), /private content/);
+});
+
+test('native subagent activity retains reported lifecycle status and observed timing', () => {
+  const state = newState();
+  state.threadId = 'parent';
+  state.turnId = 'turn';
+  state.status = 'running';
+  const report = (id, kind, time) => event(state, 'item/completed', {
+    threadId: 'parent', turnId: 'turn',
+    item: { type: 'subAgentActivity', id, kind, agentThreadId: 'worker', agentPath: 'root/worker' },
+  }, time);
+  report('start', 'started', 100);
+  assert.equal(state.agents[0].status, 'started');
+  report('interaction', 'interacted', 150);
+  assert.equal(state.agents[0].status, 'started');
+  report('finish', 'completed', 200);
+  assert.deepEqual(state.agents.map(agent => [agent.name, agent.status, agent.observedAt, agent.endedAt]), [
+    ['root/worker', 'completed', 100, 200],
+  ]);
+});

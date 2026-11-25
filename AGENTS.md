@@ -14,3 +14,5 @@ Read README and docs before changing code. Native parity and no duplicate setup 
 - Record status, exact versions, test evidence and gaps in docs/evidence.md and docs/milestones.md. Prioritize implementation before final release acceptance; never hide blockers.
 
 - Independent API mode is subject to docs/independent-api-key.md: real key must stay out of native/tool processes, logs, webviews, argv, and settings; preserve native policy; fixed upstream, turn-scoped relay, billing consent, no fallback, fresh thread on switch. Verify effective provider at connection and thread start. Qualify local security and managed-policy compatibility before production release; do not imply ChatGPT-only functionality works via an API key.
+
+Use `npm run protocol:generate` with the exact supported runtime to refresh the generated contract. Keep `npm run test:ui` fixtures synthetic and use VS Code workspace trust prompts for their disposable folders. A local prerelease VSIX may be installed when authorized. Record the exact artifact and live cases separately from fixture results.
