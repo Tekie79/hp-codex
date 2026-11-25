@@ -1,0 +1,3 @@
+# Evidence
+
+Initial seed only. Repository source includes unit tests and CI commands; results must be recorded after they run. No authenticated live task, real MCP/plugin call, official desktop feature comparison, visual VS Code launch, or VSIX installation has been qualified. Native shared configuration is an explicit architecture contract and implemented in the initial launch helper. Device login, login switching, native inventory UI, complete approvals, history, and remote/cloud parity remain open. The starter deliberately rejects interactive server requests rather than silently approving them. No real user settings, credentials or secrets were accessed or copied to seed this repository.

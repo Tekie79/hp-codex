@@ -1,0 +1,65 @@
+{
+  "name": "hp-codex",
+  "displayName": "HP Codex",
+  "description": "Native Codex execution monitor",
+  "version": "0.0.1",
+  "publisher": "hp-codex-dev",
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=20"
+  },
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onView:hpCodex.monitor"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hpCodex",
+          "title": "HP Codex",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "hpCodex": [
+        {
+          "id": "hpCodex.monitor",
+          "name": "Execution Monitor",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "HP Codex",
+      "properties": {
+        "hpCodex.executable": {
+          "type": "string",
+          "default": "codex",
+          "scope": "machine",
+          "description": "Trusted existing Codex executable (absolute path or codex on PATH)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/native.js && node --check src/extension.js && node --check media/monitor.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tekie79/hp-codex.git"
+  }
+}

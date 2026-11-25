@@ -1,0 +1,9 @@
+# Codex implementation handoff
+
+Implement HP Codex as a native Codex frontend in this repo. Read AGENTS.md and all docs. Do not turn it into another coding agent or separate profile.
+
+1. Review seed and run tests. Establish released Codex binary/version support and generate protocol types. Implement auto discovery of the existing official installation, shared native environment and effective config, including non-default CODEX_HOME. Do not duplicate auth or config. Confirm native account and provider before allowing paid work.
+2. Complete M01–M08 sequentially with milestone branches and test fixtures. Highest priority: zero duplicate setup, native auth, MCP/plugins/apps/skills/hooks/settings reuse, session parity, accurate execution UI. Use native methods and events for all functions. Build the compact Kilo-inspired processing view with usage graph, plan, agents, expandable actions, timing, stop/steer and permissions. Include full editor/worktree support where documented.
+3. Preserve native policy, sandbox, approval, managed requirements, account/workspace scope and project instructions. Use native supported login only on request; warn about shared account changes, explicit paid-mode confirmation, no auto fallback. No secret reading/copying or private endpoints.
+4. Maintain a parity matrix against official Codex CLI/IDE/desktop, distinguishing native harness features from official-client-only/cloud services. Document and safely hand off unsupported features. Do not pretend a cloud environment can validate real local UI/auth.
+5. Add deterministic fake-server tests, UI tests, CI, security checks and exact evidence. Implement all features before final M09 qualification; real tests require explicit consent. Open reviewable PRs, no merge or release. Report remaining gaps and next milestone.

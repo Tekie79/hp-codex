@@ -1,0 +1,14 @@
+# HP Codex engineering instructions
+
+Read README and docs before changing code. Native parity and no duplicate setup are mandatory.
+
+- Use the installed official Codex App Server. Preserve inherited environment, CODEX_HOME, native configuration layers, project cwd, authentication and policy. Never create a private home by default, copy credentials, reimplement inference, masquerade as the official client, or scrape private endpoints.
+- Do not inject alternative model, provider, reasoning, sandbox, permission, plugin, skill or developer-instruction settings by default. Native policy takes precedence. Any explicit override is visible and user-selected.
+- Inspect actual installed versions and generate version-matched protocol types. Maintain a capability matrix. Unsupported native desktop/cloud functionality must be labeled rather than mocked or silently skipped.
+- Use existing native account first. Offer ChatGPT and API-key login through supported native methods only when requested. Explain that changing the shared account affects other Codex clients. Explicitly confirm paid API use and account changes. Never fall back automatically or log/store secrets.
+- Use native discovery and management APIs for config, MCP, skills, plugins, hooks, models, sessions and agents. Do not copy config or require users to reinstall. Do not write shared settings without explicit consent. Never circumvent trust, managed requirements, sandbox, tool approval or plugin trust.
+- Scope events by connection, thread, turn and item; reconcile snapshots and terminal states. Never retry an uncertain paid turn. Unknown requests fail closed. Interactive permissions and MCP prompts require exact native UI and explicit approval.
+- Render actual event data only. No private reasoning. Separate cumulative tokens, latest increments, quota, context capacity/occupancy and estimated API price. Unknown is unavailable, not zero.
+- Secure webviews (strict CSP, text-only untrusted data, narrow message handlers, no raw RPC bridge). Bound memory and logs; never include user config secrets or private traces in public commits.
+- Run npm test and npm run check, then add versioned fake-server integration and UI tests, and record actual live validation separately. No claims of tests not run. Work in milestone branches and open reviewable PRs; do not merge or publish without approval.
+- Record status, exact versions, test evidence and gaps in docs/evidence.md and docs/milestones.md. Prioritize implementation before final release acceptance; never hide blockers.
