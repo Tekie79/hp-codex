@@ -33,3 +33,7 @@ HP Codex is a complete alternative VS Code presentation layer for native Codex c
 No alternate LLM engine, private ChatGPT endpoints, raw auth token import, hidden reasoning extraction, duplicate MCP/plugin setup, forced account switches, permission bypass, silent billing, copied client identity, mandatory cloud server or fabricated monitoring. Full parity is a tracked target; managed services and surface-specific features may not be exposed to third-party clients.
 
 R20 (P0): Independent HP Codex API key mode as specified in docs/independent-api-key.md. Native local configuration and integrations remain inherited, but provider-specific features and ChatGPT-only entitlements must be evaluated and labeled separately. Changing/removing this key cannot change native login or native API credentials.
+
+## Prerelease qualification
+
+The first candidate targets Codex 0.155.1 and Apple Silicon macOS. It treats generated stable methods as the default and explicitly opts in to native Plan mode. Official-client handoffs and per-feature qualification are recorded in [the capability matrix](parity.md) and [evidence](evidence.md). Any remaining mandatory release gate keeps the build in prerelease.

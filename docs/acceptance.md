@@ -36,3 +36,10 @@ Compare behavior with official Codex using the same account, cwd and home. Do no
 | A23 | Same MCP/skills/plugin config under both modes | Compare native effective config, demonstrate supported invocations; report account-dependent and provider-specific limitations |
 | A24 | Credential isolation, managed policy, failure cases | No raw key leak in native process, network redirects, hooks, tools or logs; fail closed on unqualified policy/route; no silent paid retries or user setting overrides; review local relay capability abuse |
 
+
+## 0.1.0 prerelease status
+
+- Actual local evidence covers existing native authentication, effective configuration and integration inventories, selected-model live inference, read-only terminal execution, native history, the user-approved file edit, a native Plan mode item, and a completed native subagent.
+- The release gate still requires live native questions and full MCP elicitation, compatible managed environments, concurrent native clients, remote hosts and real independent API billing. Remaining UI-only cases are documented in the matrix.
+- The extension can be installed locally as a prerelease. Official-client handoffs and unsupported capabilities are documented in the [capability matrix](parity.md).
+- See [evidence](evidence.md) for the executed cases, the exact package and distinctions between fixture and live tests.
