@@ -408,9 +408,10 @@ class Monitor {
 
   lookupAgents(rpc) {
     for (const agent of this.state.agents) {
-      if (this.agentLookups.has(agent.id) || this.agentLookups.size >= 60) continue;
-      this.agentLookups.add(agent.id);
-      void rpc.request('thread/read', { threadId: agent.id, includeTurns: false }).then(({ thread }) => {
+      const lookup = agent.id + (agent.endedAt ? ':terminal' : ':active');
+      if (this.agentLookups.has(lookup) || this.agentLookups.size >= 120) continue;
+      this.agentLookups.add(lookup);
+      void rpc.request('thread/read', { threadId: agent.id, includeTurns: false }).then(async ({ thread }) => {
         if (this.rpc !== rpc || ![this.state.threadId, ...this.state.agents.map(row => row.id)].includes(thread?.parentThreadId)) return;
         const current = this.state.agents.find(row => row.id === agent.id && row.turnId === agent.turnId);
         if (!current || thread.id !== current.id) return;
@@ -418,6 +419,13 @@ class Monitor {
         current.role = clean(thread.agentRole, 100);
         current.parentId = thread.parentThreadId;
         this.publish();
+        if (!current.endedAt || current.result) return;
+        const response = await rpc.request('thread/items/list', { threadId: thread.id, limit: 12, sortDirection: 'desc' });
+        const answer = list(response?.data).find(entry => entry.item?.type === 'agentMessage')?.item;
+        if (this.rpc === rpc && this.state.agents.includes(current) && answer?.text) {
+          current.result = clean(answer.text, 3000);
+          this.publish();
+        }
       }).catch(() => {});
     }
   }

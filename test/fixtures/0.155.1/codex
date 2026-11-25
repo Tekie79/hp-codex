@@ -13,7 +13,17 @@ if (process.argv.includes('--version')) {
 
 const scenario = process.env.HP_FIXTURE_SCENARIO || 'normal';
 const cwd = process.cwd();
-const provider = 'openai';
+const overrides = {};
+for (let index = 0; index < process.argv.length - 1; index++) {
+  if (process.argv[index] !== '-c') continue;
+  const assignment = process.argv[++index];
+  const split = assignment.indexOf('=');
+  overrides[assignment.slice(0, split)] = JSON.parse(assignment.slice(split + 1));
+}
+const provider = overrides.model_provider || 'openai';
+const prefix = 'model_providers.' + provider + '.';
+const providerConfig = Object.fromEntries(Object.entries(overrides)
+  .filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
 const rows = new Map();
 const turns = new Map();
 const write = message => process.stdout.write(JSON.stringify(message) + '\n');
@@ -120,7 +130,7 @@ reader.on('line', line => {
   switch (method) {
     case 'account/read': return respond({ account: { type: 'chatgpt', email: 'fixture@example.invalid', planType: 'prolite' }, requiresOpenaiAuth: true });
     case 'account/rateLimits/read': return respond({ rateLimits: { limitId: 'codex', primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: timestamp() + 7200 } } });
-    case 'config/read': return respond({ config: { model: 'fixture-model', model_reasoning_effort: 'medium', model_provider: provider }, origins: {}, layers: null });
+    case 'config/read': return respond({ config: { model: 'fixture-model', model_reasoning_effort: 'medium', model_provider: provider, model_providers: { [provider]: providerConfig } }, origins: {}, layers: null });
     case 'configRequirements/read': return respond({ requirements: null });
     case 'model/list': return respond({ data: [{ model: 'fixture-model', displayName: 'Fixture model', hidden: false, supportedReasoningEfforts: [{ reasoningEffort: 'medium' }] }], nextCursor: null });
     case 'collaborationMode/list': return respond({ data: [{ name: 'Plan', mode: 'plan', model: null, reasoning_effort: null }] });

@@ -96,7 +96,9 @@ function updateAgents(state, item, turnId, now) {
     if (typeof id !== 'string' || id === state.threadId) continue;
     const previous = state.agents.find(agent => agent.id === id);
     const report = Object.hasOwn(item.agentsStates || {}, id) ? item.agentsStates[id] : null;
-    const status = clean(report?.status, 60) || previous?.status || '';
+    const activityStatus = item.type === 'subAgentActivity' && ['started', 'completed', 'interrupted'].includes(item.kind)
+      ? item.kind : '';
+    const status = clean(report?.status, 60) || activityStatus || previous?.status || '';
     const ended = ['completed', 'errored', 'shutdown', 'notFound', 'interrupted'].includes(status);
     const parentId = clean(item.senderThreadId, 160) || previous?.parentId || state.threadId;
     upsert(state.agents, {

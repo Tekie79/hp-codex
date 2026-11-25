@@ -110,13 +110,20 @@ async function launch(theme, scenario, vsix) {
 async function sidebar(page, width) {
   const frame = page.locator('.part.sidebar');
   const box = await frame.boundingBox();
-  const x = box.x + box.width;
-  const y = box.y + Math.min(150, box.height / 2);
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(box.x + width, y, { steps: 10 });
-  await page.mouse.up();
-  return (await frame.boundingBox()).width;
+  const edge = box.x + box.width;
+  let result = box.width;
+  for (const offset of [0, 2, -2]) {
+    if (Math.abs(result - width) < 40) break;
+    const next = await frame.boundingBox();
+    const x = next.x + next.width + offset;
+    const y = next.y + Math.min(185, next.height / 2);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(edge + width - box.width, y, { steps: 12 });
+    await page.mouse.up();
+    result = (await frame.boundingBox()).width;
+  }
+  return result;
 }
 
 async function screenshot(view, name) {
@@ -167,7 +174,7 @@ async function conversationAndApproval() {
     assert.equal(await view.locator('#metrics dd').first().innerText(), '420');
     assert.equal((await view.locator('#agents details').all()).length, 2);
     const wide = await sidebar(page, 570);
-    assert.ok(narrow < 350 && wide > 420, 'Sidebar width changed from narrow to wide');
+    assert.ok(narrow < 350 && wide > 420, 'Sidebar width changed from narrow to wide. Observed ' + narrow + ' and ' + wide);
     await screenshot(view, 'fake-dark-wide-completed');
     await view.locator('#activity details').filter({ hasText: 'Command ·' }).first().locator('summary').click();
     assert.match(await view.locator('#activity details[open] pre').innerText(), /fixture/);
@@ -231,10 +238,43 @@ async function restartAfterFailure() {
   } finally { await shutdown(); }
 }
 
+async function independentKey() {
+  const { page, view, trace, shutdown } = await launch('Default Dark Modern', 'normal', process.env.HP_VSCODE_VSIX);
+  try {
+    await button(view, 'Settings').click();
+    const field = page.locator('.quick-input-widget input:visible');
+    for (const synthetic of ['hp-codex-fixture-synthetic-first', 'hp-codex-fixture-synthetic-replacement']) {
+      await button(view, 'Save or replace key').click();
+      await field.waitFor({ timeout: 8000 });
+      assert.equal(await field.getAttribute('type'), 'password');
+      await field.fill(synthetic);
+      await field.press('Enter');
+      await ready(view, '#notice', 'Independent key saved');
+      assert.doesNotMatch(await view.locator('body').innerText(), /hp-codex-fixture-synthetic/);
+    }
+    await button(view, 'Connect API mode').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Connect API mode', exact: true }).click();
+    await ready(view, '#notice', 'Independent API mode · key format checked');
+    assert.equal(await view.locator('#account').textContent(), 'OpenAI API · billable');
+    await screenshot(view, 'fake-dark-disarmed-api-mode');
+    await button(view, 'Connect existing Codex').click();
+    await ready(view, '#notice', 'Connected to existing Codex');
+    assert.match(await view.locator('#account').textContent(), /ChatGPT/);
+    await button(view, 'Remove key').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Remove', exact: true }).click();
+    await ready(view, '#notice', 'Independent key removed');
+    assert.match(await view.locator('#keyStatus').textContent(), /No independent API key saved/);
+    const wire = readFileSync(trace, 'utf8');
+    assert.doesNotMatch(wire, /hp-codex-fixture-synthetic|turn\/start|account\/(login|logout)/);
+    console.log('PASS — masked key save, replacement and removal, disarmed API connection and native switch-back');
+  } finally { await shutdown(); }
+}
+
 (async () => {
   await conversationAndApproval();
   await interrupt();
   await restartAfterFailure();
+  await independentKey();
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;

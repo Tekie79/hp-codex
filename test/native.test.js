@@ -58,3 +58,22 @@ test('ignore stale usage and terminal deltas, retain thread history, and expose 
   assert.equal(state.items[0].detail, 'public summary');
   assert.doesNotMatch(JSON.stringify(state), /private content/);
 });
+
+test('native subagent activity retains reported lifecycle status and observed timing', () => {
+  const state = newState();
+  state.threadId = 'parent';
+  state.turnId = 'turn';
+  state.status = 'running';
+  const report = (id, kind, time) => event(state, 'item/completed', {
+    threadId: 'parent', turnId: 'turn',
+    item: { type: 'subAgentActivity', id, kind, agentThreadId: 'worker', agentPath: 'root/worker' },
+  }, time);
+  report('start', 'started', 100);
+  assert.equal(state.agents[0].status, 'started');
+  report('interaction', 'interacted', 150);
+  assert.equal(state.agents[0].status, 'started');
+  report('finish', 'completed', 200);
+  assert.deepEqual(state.agents.map(agent => [agent.name, agent.status, agent.observedAt, agent.endedAt]), [
+    ['root/worker', 'completed', 100, 200],
+  ]);
+});
