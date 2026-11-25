@@ -17,6 +17,7 @@ const requests = [
   { id: 5, method: 'turn/steer', params: { threadId: 'thread', expectedTurnId: 'turn', input: [] } },
   { id: 6, method: 'thread/items/list', params: { threadId: 'thread', limit: 30, sortDirection: 'desc' } },
   { id: 7, method: 'review/start', params: { threadId: 'thread', target: { type: 'uncommittedChanges' } } },
+  { id: 8, method: 'collaborationMode/list', params: {} },
 ] satisfies ClientRequest[];
 
 const decision: CommandExecutionRequestApprovalResponse = { decision: 'decline' };

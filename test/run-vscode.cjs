@@ -188,6 +188,8 @@ async function interrupt() {
   const { view, trace, shutdown } = await launch('Default Light Modern', 'hold', process.env.HP_VSCODE_VSIX);
   try {
     assert.match(await view.locator('body').getAttribute('class'), /vscode-light/);
+    const composerGap = await view.locator('#composer').evaluate(node => document.documentElement.clientHeight - node.getBoundingClientRect().bottom);
+    assert.ok(Math.abs(composerGap) <= 2, 'Composer stays at the bottom with the prompt banner hidden');
     await screenshot(view, 'fake-light-empty');
     const entry = view.getByRole('textbox', { name: 'Message to Codex' });
     await entry.fill(fixtureText);
@@ -218,8 +220,9 @@ async function restartAfterFailure() {
     await screenshot(view, 'fake-dark-error');
     await page.keyboard.press('F1');
     const command = page.locator('.quick-input-widget input');
-    await command.fill('Developer: Reload Window');
-    await page.getByText('Developer: Reload Window', { exact: true }).first().click();
+    await command.fill('>Developer: Reload Window');
+    await page.locator('.quick-input-list .monaco-list-row').filter({ hasText: 'Reload Window' }).first().waitFor({ timeout: 8000 });
+    await command.press('Enter');
     await ready(view, '#notice', 'A previous turn needs reconciliation');
     await button(view, 'Reconcile').waitFor();
     const wire = readFileSync(trace, 'utf8').trim().split('\n').map(JSON.parse);

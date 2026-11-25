@@ -273,7 +273,7 @@ class Monitor {
     };
     await Promise.all([
       read('model/list', { limit: 100, includeHidden: false }, value => { this.models = models(value); }),
-      this.experimental && read('collaborationMode/list', undefined, value => {
+      this.experimental && read('collaborationMode/list', {}, value => {
         this.modes = list(value?.data).filter(mode => ['plan', 'default'].includes(mode.mode));
       }),
       this.mode === 'native' && this.account?.type === 'ChatGPT' && read('account/rateLimits/read', undefined, value => {

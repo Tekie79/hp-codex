@@ -16,6 +16,7 @@ body {
   margin: 0;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "masthead" "notice" "attention" "main" "composer";
   background: var(--surface);
   color: var(--vscode-sideBar-foreground, var(--vscode-foreground, CanvasText));
   font: var(--vscode-font-size, 13px)/1.45 var(--font);
@@ -43,9 +44,9 @@ h1, h2, h3 { margin: 0; line-height: 1.35; }
 h1 { font-size: 1.18em; font-weight: 650; }
 h2 { font-size: 1em; font-weight: 650; }
 h3 { font-size: .88em; font-weight: 650; }
-main { overflow-y: auto; overflow-x: hidden; min-width: 0; scrollbar-gutter: stable; }
+main { grid-area: main; overflow-y: auto; overflow-x: hidden; min-width: 0; scrollbar-gutter: stable; }
 main > section { max-width: 78ch; padding: 14px 11px 22px; margin: 0 auto; }
-.masthead { border-bottom: 1px solid var(--border); padding: 8px 10px 0; min-width: 0; }
+.masthead { grid-area: masthead; border-bottom: 1px solid var(--border); padding: 8px 10px 0; min-width: 0; }
 .titleLine, .runtime, .sectionLine, .composeActions {
   display: flex; align-items: center; gap: 8px; min-width: 0;
 }
@@ -64,9 +65,9 @@ main > section { max-width: 78ch; padding: 14px 11px 22px; margin: 0 auto; }
 .tabs button { background: transparent; color: var(--muted); border-radius: 0; border: 0; border-bottom: 2px solid transparent; padding: 3px 5px 6px; flex: 0 0 auto; }
 .tabs button[aria-pressed="true"] { border-bottom-color: var(--accent); color: var(--vscode-foreground); }
 .tabs button:focus-visible { outline-offset: -2px; }
-.notice { color: var(--muted); min-height: 24px; border-bottom: 1px solid var(--border); padding: 4px 10px; font-size: .9em; overflow-wrap: anywhere; }
+.notice { grid-area: notice; color: var(--muted); min-height: 24px; border-bottom: 1px solid var(--border); padding: 4px 10px; font-size: .9em; overflow-wrap: anywhere; }
 .notice:empty { display: none; }
-.attention { border-inline-start: 3px solid var(--vscode-editorWarning-foreground, #c0881d); background: var(--vscode-editorWidget-background); padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px; }
+.attention { grid-area: attention; border-inline-start: 3px solid var(--vscode-editorWarning-foreground, #c0881d); background: var(--vscode-editorWidget-background); padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px; }
 .blank { margin-top: 24px; padding: 14px 10px; border-inline-start: 2px solid var(--accent); }
 .blank button:not(:disabled) { margin-top: 4px; }
 .blank button:disabled { display: none; }
@@ -121,7 +122,7 @@ input[type="search"] { padding: 4px 5px; }
 .check { display: flex; gap: 4px; align-items: center; margin-bottom: 8px; }
 .actions, .composeOptions, .attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .actions { margin: 5px 0; }
-#composer { position: relative; padding: 7px 9px 8px; border-top: 1px solid var(--border); min-width: 0; }
+#composer { grid-area: composer; position: relative; padding: 7px 9px 8px; border-top: 1px solid var(--border); min-width: 0; }
 #composer textarea { display: block; width: 100%; resize: vertical; min-height: 46px; max-height: min(32vh, 240px); margin-bottom: 5px; padding: 6px 8px; }
 .composeActions { align-items: start; gap: 2px 6px; flex-wrap: wrap; }
 .composeActions > :last-child { margin-inline-start: auto; }
