@@ -4,7 +4,7 @@
 |---|---|---|
 | M00 | Repo, requirements, acceptance, initial extension | Seed, unqualified |
 | M01 | Native discovery, installed version/schema, shared-home contract, fake server and transport hardening | Partial starter |
-| M02 | Existing account reuse, native ChatGPT/API login, model/effort and policy, account isolation | Partial existing-account display |
+| M02 | Existing account reuse, native ChatGPT login, independent HP API key, model/effort and policy, account isolation | Partial: independent API preview and key UI; live/security qualification pending |
 | M03 | Shared config and native MCP, plugin, app, skill, hook and settings parity; no duplicate setup | Not started UI; engine inheritance is foundational |
 | M04 | Thread/history/worktree/editor composer, mentions, attachments, plan/review and native commands | Partial new turn |
 | M05 | Kilo-style execution UI, live plans, agent tree, timings and event details | Partial starter |

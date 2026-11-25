@@ -1,3 +1,5 @@
 # Evidence
 
 Initial seed only. Repository source includes unit tests and CI commands; results must be recorded after they run. No authenticated live task, real MCP/plugin call, official desktop feature comparison, visual VS Code launch, or VSIX installation has been qualified. Native shared configuration is an explicit architecture contract and implemented in the initial launch helper. Device login, login switching, native inventory UI, complete approvals, history, and remote/cloud parity remain open. The starter deliberately rejects interactive server requests rather than silently approving them. No real user settings, credentials or secrets were accessed or copied to seed this repository.
+
+Independent API preview added with masked VS Code input/SecretStorage, per-connection provider override, loopback relay, explicit paid-turn consent and mode switch isolation. Synthetic tests are included but not yet reported as run; no actual API request, paid turn, real key, managed-policy or local VS Code integration test has been performed. Do not mark M02 complete.

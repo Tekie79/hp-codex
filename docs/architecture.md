@@ -4,7 +4,7 @@ VS Code webview -> extension host/client adapter -> native Codex App Server (std
 
 ## Shared environment contract (non-negotiable)
 
-Launch the existing supported binary with the actual selected workspace cwd and inherited process environment. If CODEX_HOME is set, preserve it verbatim; otherwise allow Codex to resolve its own default (commonly ~/.codex). Do not synthesize a new config, import credentials, parse auth.json, change environment providers or override policy. Use native config/read and configRequirements/read where available to inspect effective settings safely. Preserve original settings even on uninstall. Existing official clients may use a separate live process; shared persistent settings/history do not imply shared live process ownership. Respect native concurrency and resume limitations.
+Launch the existing supported binary with the actual selected workspace cwd and inherited process environment. If CODEX_HOME is set, preserve it verbatim; otherwise allow Codex to resolve its own default (commonly ~/.codex). Do not synthesize a new config, import native credentials, parse auth.json, silently change environment providers or override policy. Only the explicitly selected independent HP API key mode may apply a process-local inference provider override; see docs/independent-api-key.md. Use native config/read and configRequirements/read where available to inspect effective settings safely. Preserve original settings even on uninstall. Existing official clients may use a separate live process; shared persistent settings/history do not imply shared live process ownership. Respect native concurrency and resume limitations.
 
 Read native account status and account identity/routing where supported. Only on user instruction invoke native account login or logout; warn these can change the shared account. API mode requires explicit paid-action consent; never change provider automatically. Device/browser auth follows runtime-supported URLs and state, not homemade OAuth.
 
@@ -22,10 +22,14 @@ Process item/started and item/completed, supported deltas, plan updates, token u
 
 Header: connection/account/model, task/status and elapsed. Usage graph and actual counters. Plan checklist. Expandable activity, agent tree and native diffs. Composer and editor integration. Native settings/inventory panel and history. Theme tokens, accessible controls and narrow sidebar.
 
-Codex owns settings, secrets, history and plugin state; HP Codex stores only its UI preferences and bounded transient views by default. No telemetry in HP Codex. Existing engine behavior remains subject to native settings. All untrusted content renders as text or isolated, permission-checked native resources. No arbitrary shell or RPC bridge.
+Codex owns native settings, secrets, history and plugin state; HP Codex stores only its UI preferences and bounded transient views by default, plus the optional independently supplied API key in VS Code SecretStorage. No telemetry in HP Codex. Existing engine behavior remains subject to native settings. All untrusted content renders as text or isolated, permission-checked native resources. No arbitrary shell or RPC bridge.
 
 ## Parity boundaries
 
 App Server exposes native harness functionality; official UI-only features, private reasoning, cloud backend and client-specific authentication/verification may differ. Maintain evidence-backed capability matrix per released version. Unsupported functions must be visibly unavailable with supported official-client handoff where possible. Do not emulate proprietary endpoints or impersonate client identity.
 
 References: https://developers.openai.com/codex/app-server ; https://github.com/openai/codex/tree/main/codex-rs/app-server ; https://developers.openai.com/resources/docs-mcp
+
+## Independent API inference
+
+A distinct per-connection native provider routes Responses traffic through a local authenticated relay to the fixed OpenAI Platform endpoint. The actual API key remains in the extension host; the child receives only a short-lived local capability. Managed restrictions remain authoritative; do not bypass incompatible requirements. Existing home and native account stay intact. Key mode does not invoke native login/logout. Fresh thread required across mode/key changes. See docs/independent-api-key.md for constraints and release gates.

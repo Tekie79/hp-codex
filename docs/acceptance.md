@@ -23,3 +23,16 @@ Use versioned schemas, fake server fixtures and disposable workspace; live cases
 | A17 | Clean install, tests, VSIX, uninstall | Reproducible; original Codex settings/auth/history remain unchanged |
 
 Compare behavior with official Codex using the same account, cwd and home. Do not modify existing user's real settings to make tests pass.
+
+## Independent API mode qualification
+
+| ID | Scenario | Pass condition |
+|---|---|---|
+| A18 | Save/replace/delete HP key with native ChatGPT or native API auth | Only HP SecretStorage changes; verify native config/auth hashes and same native account before/after |
+| A19 | Switch native/API modes while idle or while running | Native default; explicit mode selection; fresh thread when idle, switch rejected when running or uncertain; no automatic fallback |
+| A20 | Native provider routing | Effective and returned thread provider matches unique per-connection override; actual key absent from child env, args, settings, webview, logs, MCP, hooks and tool process; reject incompatible policy |
+| A21 | Synthetic relay tests | Only authenticated local POST Responses/compact while armed; reject unauthenticated/idle/unknown paths, cap body and requests, close after disconnect; no credential forwarding to arbitrary destination |
+| A22 | Real API turn with explicit consent | Exact API project billed, native login unchanged, streaming/interrupt correct, errors clear; no real paid test by default |
+| A23 | Same MCP/skills/plugin config under both modes | Compare native effective config, demonstrate supported invocations; report account-dependent and provider-specific limitations |
+| A24 | Credential isolation, managed policy, failure cases | No raw key leak in native process, network redirects, hooks, tools or logs; fail closed on unqualified policy/route; no silent paid retries or user setting overrides; review local relay capability abuse |
+

@@ -10,7 +10,7 @@ HP Codex is a complete alternative VS Code presentation layer for native Codex c
 |---|---|---|
 | R01 | Native runtime | Auto-discover compatible official executable (PATH, supported official extension bundle or documented install location); inspect version/schema; never download/replace silently. Start app-server using the existing environment and workspace. |
 | R02 | Shared config | Honor native CODEX_HOME/default, config.toml layering, project trust, managed requirements, profile, model/provider/effort, rules, hooks, environment, network, sandbox and approvals. No parallel configuration. |
-| R03 | Existing authentication | Automatically use current native account. Support ChatGPT browser/device and API-key auth through native flows when explicitly requested; show shared-account impact, confirmation, cancel, status, limits and logout. No automatic paid fallback. |
+| R03 | Authentication modes | Default to existing native Codex account/settings. Support native ChatGPT browser/device and native account actions explicitly. Separately support HP-owned OpenAI API key in SecretStorage with process-local inference routing and no native auth changes, visible mode, explicit paid-turn consent, fresh thread on switch, key replacement/removal and no automatic fallback. |
 | R04 | Existing MCP | Enumerate effective configured servers, tools, auth, status and resources; use engine's native discovery and execution. Reuse authenticated connections/grants where available; only prompt when native runtime requires it. Reload native config on request. |
 | R05 | Plugins/skills/apps/hooks | Discover existing installed/enabled plugins, connected apps, skills and hooks via native APIs; preserve enablement, policy, trust and account scopes. Support invocation, picker/mentions, lifecycle and native management where supported. Render safe MCP app resources and user input when available. |
 | R06 | Projects/instructions | Inherit AGENTS.md, nested instructions, workspace rules and project settings; multi-root/worktree support, actual editor context, file selection and attachments. |
@@ -31,3 +31,5 @@ HP Codex is a complete alternative VS Code presentation layer for native Codex c
 ## Out of scope / hard constraints
 
 No alternate LLM engine, private ChatGPT endpoints, raw auth token import, hidden reasoning extraction, duplicate MCP/plugin setup, forced account switches, permission bypass, silent billing, copied client identity, mandatory cloud server or fabricated monitoring. Full parity is a tracked target; managed services and surface-specific features may not be exposed to third-party clients.
+
+R20 (P0): Independent HP Codex API key mode as specified in docs/independent-api-key.md. Native local configuration and integrations remain inherited, but provider-specific features and ChatGPT-only entitlements must be evaluated and labeled separately. Changing/removing this key cannot change native login or native API credentials.

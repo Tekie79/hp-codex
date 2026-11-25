@@ -1,7 +1,7 @@
 'use strict';
 const vs=acquireVsCodeApi(),$=id=>document.getElementById(id);
 let snapshot;
-for(const id of ['connect','new','stop'])$(id).addEventListener('click',()=>vs.postMessage({type:id}));
+for(const id of ['connect','api','setKey','removeKey','new','stop'])$(id).addEventListener('click',()=>vs.postMessage({type:id}));
 $('send').addEventListener('click',()=>{const text=$('prompt').value;if(text.trim())vs.postMessage({type:'send',text});});
 function node(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 function tokens(n){return Number.isFinite(n)?n.toLocaleString():'—';}
@@ -9,10 +9,11 @@ const rows=new Map();
 window.addEventListener('message',({data:d})=>{
   if(!d?.state)return;snapshot=d;const s=d.state;
   $('notice').textContent=d.notice||'';
-  $('account').textContent=d.account?'Existing account: '+d.account.type+(d.account.plan?' · '+d.account.plan:''):'Account unavailable';
+  $('keyStatus').textContent=d.hasKey?'Independent key saved':'No independent API key saved';
+  $('account').textContent=d.account?(d.mode==='api'?'Billing: ':'Existing account: ')+d.account.type+(d.account.plan?' · '+d.account.plan:''):'Account unavailable';
   $('status').textContent=s.status;
   const active=['starting','running','stopping','unknown'].includes(s.status);
-  $('connect').disabled=d.busy||d.connected;$('new').disabled=d.busy||!d.connected||active;$('send').disabled=d.busy||!d.connected||!d.account||active;$('stop').disabled=d.busy||!d.connected||s.status!=='running';
+  $('connect').disabled=d.busy||active||(d.connected&&d.mode==='native');$('api').disabled=d.busy||active||!d.hasKey||(d.connected&&d.mode==='api');$('setKey').disabled=d.busy||active;$('removeKey').disabled=d.busy||active||!d.hasKey;$('new').disabled=d.busy||!d.connected||active;$('send').disabled=d.busy||!d.connected||!d.account||active;$('stop').disabled=d.busy||!d.connected||s.status!=='running';
   const u=s.usage;
   $('usage').textContent=u?'Total '+tokens(u.total.totalTokens)+' · Input '+tokens(u.total.inputTokens)+' · Cache '+tokens(u.total.cachedInputTokens)+' · Output '+tokens(u.total.outputTokens)+' · Context capacity '+tokens(u.capacity):'Usage unavailable';
   const canvas=$('graph');canvas.width=Math.max(1,canvas.clientWidth);const g=canvas.getContext('2d'),values=s.samples,max=Math.max(1,...values);

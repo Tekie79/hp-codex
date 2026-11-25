@@ -2,7 +2,7 @@
   "name": "hp-codex",
   "displayName": "HP Codex",
   "description": "Native Codex execution monitor",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "hp-codex-dev",
   "engines": {
     "vscode": "^1.95.0",
@@ -56,7 +56,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check src/native.js && node --check src/extension.js && node --check media/monitor.js"
+    "check": "node --check src/native.js && node --check src/extension.js && node --check media/monitor.js && node --check src/apiRelay.js"
   },
   "repository": {
     "type": "git",
